@@ -1,0 +1,32 @@
+# Example policy.yaml for mcp-guardrail
+#
+# Copy this to policy.yaml and adjust for your setup, or run
+# `mcp-guardrail init` to generate a blank starter file.
+#
+# Rules are checked top to bottom; the first "tool" pattern that
+# matches (glob-style, e.g. "github.*") decides the outcome. Anything
+# that matches no rule falls back to `default`.
+
+default: deny
+
+rules:
+  # Read-only GitHub actions: fine to auto-allow.
+  - tool: "github.list_*"
+    action: allow
+  - tool: "github.get_*"
+    action: allow
+
+  # Never let an agent delete or force-push, no matter what else matches.
+  - tool: "github.delete_*"
+    action: deny
+    note: "destructive GitHub actions are never auto-approved"
+  - tool: "github.*force_push*"
+    action: deny
+
+  # A narrow, explicit allow for the one write action this agent needs.
+  - tool: "github.create_issue"
+    action: allow
+
+  # Read-only database access, nothing else.
+  - tool: "database.read_*"
+    action: allow
