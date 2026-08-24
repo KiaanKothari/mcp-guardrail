@@ -2,6 +2,10 @@
 
 ### Security for AI Agent Tool Calls
 
+![MCP Guardrail Demo](assets/mcp-guardrail-demo.svg)
+
+
+
 **MCP Guardrail** is a lightweight security gateway for [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers. It sits between an AI agent and an MCP server to enforce tool-access policies, record agent activity, and detect exposed secrets.
 
 > **Control what your AI agents can do — before the tool call reaches your MCP server.**

@@ -1,0 +1,27 @@
+<svg width="1200" height="650" xmlns="http://www.w3.org/2000/svg">
+<rect width="1200" height="650" rx="20" fill="#111111"/>
+<text x="50" y="65" fill="#61dafb" font-family="monospace" font-size="32" font-weight="bold">🛡 MCP GUARDRAIL</text>
+<text x="50" y="105" fill="#aaaaaa" font-family="monospace" font-size="20">Security for AI Agent Tool Calls</text>
+
+<text x="50" y="165" fill="#61dafb" font-family="monospace" font-size="24">🔒 POLICY ENFORCEMENT</text>
+<line x1="50" y1="180" x2="1150" y2="180" stroke="#555"/>
+<text x="70" y="225" fill="#55dd55" font-family="monospace" font-size="24">✓ ALLOWED</text>
+<text x="300" y="225" fill="white" font-family="monospace" font-size="24">github.create_issue</text>
+<text x="70" y="270" fill="#ff4444" font-family="monospace" font-size="24">✗ BLOCKED</text>
+<text x="300" y="270" fill="white" font-family="monospace" font-size="24">shell.exec</text>
+
+<text x="50" y="335" fill="#61dafb" font-family="monospace" font-size="24">📋 AUDIT LOG</text>
+<line x1="50" y1="350" x2="1150" y2="350" stroke="#555"/>
+<text x="70" y="395" fill="#55dd55" font-family="monospace" font-size="21">DENY</text>
+<text x="220" y="395" fill="white" font-family="monospace" font-size="21">shell.exec</text>
+<text x="70" y="430" fill="#888" font-family="monospace" font-size="18">Unauthorized tool call recorded</text>
+
+<text x="50" y="485" fill="#61dafb" font-family="monospace" font-size="24">🔐 SECRET SCANNING</text>
+<line x1="50" y1="500" x2="1150" y2="500" stroke="#555"/>
+<text x="70" y="540" fill="#ffcc33" font-family="monospace" font-size="21">⚠ DETECTED</text>
+<text x="270" y="540" fill="white" font-family="monospace" font-size="21">OpenAI API key</text>
+<text x="70" y="575" fill="#ffcc33" font-family="monospace" font-size="21">⚠ DETECTED</text>
+<text x="270" y="575" fill="white" font-family="monospace" font-size="21">GitHub token</text>
+
+<text x="700" y="620" fill="#55dd55" font-family="monospace" font-size="22" font-weight="bold">✓ MCP GUARDRAIL</text>
+</svg>
