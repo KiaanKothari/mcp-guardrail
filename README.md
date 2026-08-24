@@ -1,150 +1,389 @@
-# mcp-guardrail
+# 🛡️ MCP Guardrail
 
-An open-source policy gateway, audit log, and secret scanner for [MCP](https://modelcontextprotocol.io) (Model Context Protocol) servers.
+### Security for AI Agent Tool Calls
 
-## Why this exists
+**MCP Guardrail** is a lightweight security gateway for [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers. It sits between an AI agent and an MCP server to enforce tool-access policies, record agent activity, and detect exposed secrets.
 
-MCP is how agents like Claude reach out into the real world -- databases, GitHub, internal
-APIs, the filesystem, anything with an MCP server in front of it. Adoption has moved fast in
-2026, but the guardrails around it haven't kept up. Recent industry research on MCP deployments
-reports that only a minority of setups implement any access scoping for tool permissions, that a
-majority expose credentials as plain hardcoded values in server config files, and that most
-organizations grant their AI agents broader access than they'd give a human employee doing the
-same job.
+> **Control what your AI agents can do — before the tool call reaches your MCP server.**
 
-`mcp-guardrail` is a small, focused answer to that gap: a proxy that sits between your MCP
-client and the real MCP server, so you decide what the agent can actually call, you get a
-written record of what it did, and you catch a leaked credential in a config file before it
-ships.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-purple)](https://modelcontextprotocol.io/)
+[![Security](https://img.shields.io/badge/Security-Guardrail-red)](#security-model)
 
-It does three things:
+---
 
-1. **Enforces a policy** -- an explicit allow/deny list (with glob patterns) for which tools an
-   agent is allowed to call. Denied calls never reach the real server.
-2. **Keeps an audit log** -- every tool call, allowed or blocked, is written to a local JSONL
-   file you can tail, grep, or summarize.
-3. **Scans for hardcoded secrets** -- a narrow, purpose-built scanner for the specific mistake of
-   pasting a real API key or token into an MCP server's config.
+## 🚨 Why MCP Guardrail?
 
-This is the fully open-source core, and it's meant to stay that way. There's no dashboard, no
-account, no server to sign up for -- it's a CLI you run yourself.
+AI agents are increasingly being connected to tools that can:
 
-## Install
+* Read files
+* Access databases
+* Modify repositories
+* Send messages
+* Execute actions
+* Access external services
+
+MCP makes connecting AI models to these tools easier.
+
+But greater tool access also creates a security problem:
+
+**What happens when an AI agent calls a tool it should not be allowed to use?**
+
+MCP Guardrail provides a lightweight policy layer between the agent and the MCP server.
+
+```text
+┌──────────────┐
+│   AI Agent   │
+└──────┬───────┘
+       │
+       │ Tool Call
+       ▼
+┌──────────────────────────────┐
+│       MCP GUARDRAIL          │
+│                              │
+│  🔒 Policy Enforcement       │
+│  📋 Audit Logging            │
+│  🔐 Secret Detection         │
+└──────────────┬───────────────┘
+               │
+        Allowed Calls
+               │
+               ▼
+        ┌─────────────┐
+        │ MCP Server  │
+        └─────────────┘
+```
+
+---
+
+# ✨ Features
+
+### 🔒 Policy Enforcement
+
+Control which MCP tools an AI agent is allowed to call.
+
+Example:
+
+```text
+github.list_repositories     → ALLOWED
+github.create_issue          → ALLOWED
+github.delete_repository     → BLOCKED
+shell.execute                → BLOCKED
+```
+
+This enables a **least-privilege** approach to AI agent tool access.
+
+---
+
+### 📋 Audit Logging
+
+Record tool activity so you can understand what an AI agent attempted to do.
+
+Example:
+
+```text
+[2026-08-24 14:32:11] github.list_repositories   ALLOWED
+[2026-08-24 14:32:13] github.create_issue        ALLOWED
+[2026-08-24 14:32:17] github.delete_repository   BLOCKED
+```
+
+Audit logs can help with:
+
+* Debugging
+* Security investigations
+* Monitoring
+* Compliance
+* Understanding agent behavior
+
+---
+
+### 🔐 Secret Scanning
+
+Detect potentially sensitive information before it is passed through the tool layer.
+
+Examples of information that may require protection include:
+
+```text
+API keys
+Access tokens
+Private credentials
+Environment secrets
+Authentication material
+```
+
+If a potential secret is detected, the request can be blocked instead of being passed downstream.
+
+---
+
+# ⚡ Quick Start
+
+## 1. Clone the repository
+
+```bash
+git clone https://github.com/KiaanKothari/mcp-guardrail.git
+cd mcp-guardrail
+```
+
+## 2. Create a virtual environment
+
+### macOS / Linux
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### Windows
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+## 3. Install
 
 ```bash
 pip install -e .
 ```
 
-(Not yet published to PyPI -- clone this repo and install locally for now.)
+---
 
-## Quick start
+# 🧪 Example
 
-### 1. Write a policy
-
-```bash
-mcp-guardrail init
-```
-
-This writes a commented starter `policy.yaml`. See `policy.example.yaml` in this repo for a
-fuller example. The shape is:
+A simplified policy might look like:
 
 ```yaml
-default: deny
+allowed_tools:
+  - github.list_repositories
+  - github.create_issue
 
-rules:
-  - tool: "github.create_issue"
-    action: allow
-  - tool: "github.delete_*"
-    action: deny
-    note: "destructive GitHub actions are never auto-approved"
+denied_tools:
+  - github.delete_repository
+  - shell.execute
 ```
 
-Rules are checked top to bottom; the first pattern that matches a tool name wins. Anything
-matching no rule falls back to `default`. Start from `default: deny` and open up only what the
-agent actually needs -- that's the whole point.
+An incoming request is evaluated before it reaches the MCP server:
 
-### 2. Wrap your real MCP server
-
-Wherever your MCP client config currently launches a server directly, point it at
-`mcp-guardrail run` instead. For example, in a Claude Desktop / Claude Code style
-`mcpServers` config:
-
-```json
-{
-  "mcpServers": {
-    "github": {
-      "command": "mcp-guardrail",
-      "args": [
-        "run", "--policy", "/path/to/policy.yaml", "--",
-        "npx", "-y", "@modelcontextprotocol/server-github"
-      ]
-    }
-  }
-}
+```text
+AI Agent
+   │
+   │ github.create_issue
+   ▼
+MCP Guardrail
+   │
+   ├── Policy Check
+   │       └── ALLOWED ✓
+   │
+   ├── Secret Scan
+   │       └── CLEAN ✓
+   │
+   └── Audit Log
+           │
+           ▼
+      MCP Server
 ```
 
-Guardrail spawns the real server itself and transparently proxies everything between it and
-the client. `tools/call` requests get checked against your policy; a denied call never reaches
-the real server -- the client gets an error response back immediately instead, as if the server
-itself had refused it.
+A prohibited request:
 
-### 3. Check what happened
+```text
+AI Agent
+   │
+   │ github.delete_repository
+   ▼
+MCP Guardrail
+   │
+   └── Policy Check
+           │
+           └── BLOCKED ✗
+```
+
+The MCP server never receives the blocked request.
+
+---
+
+# 🏗️ Architecture
+
+```text
+                   ┌──────────────────┐
+                   │    AI Agent      │
+                   └────────┬─────────┘
+                            │
+                            ▼
+                  ┌─────────────────────┐
+                  │    MCP Guardrail    │
+                  │                     │
+                  │ ┌─────────────────┐ │
+                  │ │ Policy Engine   │ │
+                  │ └─────────────────┘ │
+                  │          ↓          │
+                  │ ┌─────────────────┐ │
+                  │ │ Secret Scanner  │ │
+                  │ └─────────────────┘ │
+                  │          ↓          │
+                  │ ┌─────────────────┐ │
+                  │ │  Audit Logger   │ │
+                  │ └─────────────────┘ │
+                  └──────────┬──────────┘
+                             │
+                    Allowed Requests
+                             │
+                             ▼
+                    ┌────────────────┐
+                    │   MCP Server   │
+                    └────────────────┘
+```
+
+---
+
+# 🎯 Design Philosophy
+
+MCP Guardrail is intentionally designed to be **small and focused**.
+
+Rather than trying to become a complete AI security platform, the project focuses on three core responsibilities:
+
+```text
+1. Control tool access
+2. Detect potentially dangerous information
+3. Record what happened
+```
+
+The goal is to provide a security layer that can be placed around an MCP deployment without requiring the underlying MCP server to be completely redesigned.
+
+---
+
+# 🔒 Security Model
+
+MCP Guardrail follows a **least-privilege** approach.
+
+AI agents should receive only the tool permissions required to complete their task.
+
+For example:
+
+```text
+Agent
+  │
+  ├── read_database       ✓
+  ├── search_documents    ✓
+  ├── create_ticket       ✓
+  │
+  ├── delete_database     ✗
+  └── execute_shell       ✗
+```
+
+This reduces the potential impact of unintended or malicious tool calls.
+
+### Important
+
+MCP Guardrail is an additional security layer.
+
+It should not replace:
+
+* Authentication
+* Authorization
+* Network security
+* Sandboxing
+* Secure credential management
+* Infrastructure security
+* MCP server security practices
+
+---
+
+# 🧪 Testing
+
+Run the test suite with:
 
 ```bash
-mcp-guardrail report
+pytest -q
 ```
 
-```
-Total calls seen:   14
-Allowed:            11
-Blocked:            3
-
-Most-called tools:
-     6  github.list_issues
-     4  github.create_issue
-     3  shell.exec
-
-Most recent blocked calls (up to 10):
-  [2026-08-23 10:04:12] shell.exec -- no rule matched; fell back to default action
-```
-
-### 4. Scan for hardcoded secrets
+For development:
 
 ```bash
-mcp-guardrail scan ~/.config/claude/
+pip install -e .
+pip install pytest
+pytest
 ```
 
-Checks `.json`, `.yaml`/`.yml`, `.env`, and `.toml` files under the given path for patterns
-that look like real API keys, tokens, or private keys (AWS, GitHub, Slack, OpenAI, Anthropic,
-PEM private key blocks, and a generic `key/secret/token/password = "..."` heuristic). It skips
-obvious placeholders (`YOUR_API_KEY`, `${ENV_VAR}`, `changeme`, `<...>`, etc.) and masks the
-matched value in its output. Exits non-zero when it finds something, so it's usable as a CI
-check on a repo of MCP configs.
+---
 
-## How the proxy works
+# 🗺️ Roadmap
 
-An MCP client normally launches a server as a subprocess and talks to it over stdin/stdout using
-newline-delimited JSON-RPC 2.0. `mcp-guardrail run` spawns the *real* server itself and sits in
-between: client -> guardrail -> real server, and back. Every `tools/call` message is inspected
-and checked against your policy before it's forwarded; everything else (`initialize`, tool
-listing, notifications, and all server-to-client traffic) passes straight through untouched.
+### v0.1
 
-This targets the standard newline-delimited JSON-RPC stdio transport. A server using different
-framing would need a small adjustment to the read loop in `proxy.py`.
+* [x] Tool policy enforcement
+* [x] Audit logging
+* [x] Secret scanning
+* [ ] Expand automated test coverage
+* [ ] Publish package to PyPI
+* [ ] Add integration examples
 
-## What this is not (yet)
+### Future
 
-This is the open-source core, deliberately scoped small: a proxy, a policy file, a log, a
-scanner. It does not include a hosted dashboard, team accounts, SSO, or long-term audit
-retention -- if there's ever a paid layer built on top of this, that's where it would live,
-sitting next to the free CLI rather than replacing it.
+* [ ] More granular policy rules
+* [ ] Configuration-file support
+* [ ] Additional MCP integrations
+* [ ] Security-focused documentation
+* [ ] Performance benchmarking
+* [ ] Policy templates for common MCP servers
 
-## Contributing
+---
 
-Issues and PRs welcome. Useful directions if you want to dig in: additional secret patterns,
-support for Content-Length-framed transports, per-argument policy rules (not just per-tool-name),
-and a `--dry-run` mode that logs what *would* be blocked without actually blocking it yet.
+# 🤝 Contributing
 
-## License
+MCP Guardrail is currently maintained as a **solo project by Kiaan Kothari**.
 
-MIT -- see `LICENSE`.
+If you discover a bug or have an idea for improving the project, feel free to open an issue for discussion.
+
+---
+
+# ⚠️ Disclaimer
+
+MCP Guardrail is an experimental open-source security project.
+
+It is intended for research, development, testing, and educational purposes.
+
+Do not rely on the project as the sole security mechanism for production systems without independently evaluating and testing its security properties.
+
+---
+
+# 📄 License
+
+MCP Guardrail is released under the **MIT License**.
+
+See [LICENSE](LICENSE) for details.
+
+---
+
+# 👨‍💻 Author
+
+**Kiaan Kothari**
+
+Student researcher and developer interested in:
+
+* Artificial Intelligence
+* AI Agents
+* Cybersecurity
+* Machine Learning
+* Software Engineering
+* Open Source
+
+GitHub: [@KiaanKothari](https://github.com/KiaanKothari)
+
+---
+
+## ⭐ Support the Project
+
+If MCP Guardrail is useful to you:
+
+**⭐ Star the repository**
+
+A star helps other developers discover the project and supports continued development.
+
+[![Star on GitHub](https://img.shields.io/github/stars/KiaanKothari/mcp-guardrail?style=social)](https://github.com/KiaanKothari/mcp-guardrail)
+
+---
+
+### MCP Guardrail
+
+**Give AI agents access to tools — without giving them unlimited power.**
